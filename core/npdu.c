@@ -29,7 +29,7 @@ int npdu_decode(uint8_t *npdu, struct umtp_npdu *npdu_data)
  * handle the message of net work layer for umtp procotol
  * stack.
  */
-void npdu_handler(struct umtp *umtp,
+int npdu_handler(struct umtp *umtp,
 		struct umtp_addr *src, uint8_t *pdu, 
 		uint16_t pdu_len)
 {
@@ -37,20 +37,22 @@ void npdu_handler(struct umtp *umtp,
 	struct umtp_npdu npdu_data = {0x0};
 
 	if (!umtp || !pdu)
-		return;
+		return -EINVAL;
 
 	if (pdu[0] != FTTP_PROTOCOL_VERSION)
-		return;
+		return -EPROTO;
 
 	decode_len = npdu_decode(pdu, &npdu_data);
 	debug(DEBUG, "the umtp protocol version is %d\n",
 			npdu_data.protocol_version);
 	if ((decode_len > 0) && (decode_len < pdu_len)) {
 		pdu_len -= decode_len;
-		apdu_handler(umtp, src, &pdu[decode_len], pdu_len);
+		return apdu_handler(umtp, src, &pdu[decode_len], pdu_len);
 	} else {
 		debug(INFO, "umtp decode npdu error!\n");
 	}
+
+	return 0;
 }
 
 uint16_t encode_npdu(uint8_t *npdu)

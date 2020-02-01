@@ -23,14 +23,17 @@ int main(void)
 {
 	struct umtp *umtp;
 	struct umtp_dl *dl;
+	struct umtp_conf conf = {
+		.sync_mode = true,
+	};
 
-	dl = umtp_dludp_create("eth0", "39.105.111.17", -1);
+	dl = umtp_dludp_create("ens33", "192.168.0.120", -1);
 	if (!dl) {
 		printf("umtp_dludp_create failed!\n");
 		return -1;
 	}
 
-	umtp = umtp_alloc(NULL, dl);
+	umtp = umtp_alloc(&conf, dl);
 	if (!umtp) {
 		printf("umtp_alloc failed!\n");
 		return -1;

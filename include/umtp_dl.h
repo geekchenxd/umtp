@@ -55,6 +55,8 @@ uint32_t dlumtp_get_addr(struct umtp_dl *dl);
 void dlumtp_set_addr(struct umtp_dl *dl, uint32_t addr);
 uint32_t dlumtp_get_bcast_addr(struct umtp_dl *dl);
 void dlumtp_set_bcast_addr(struct umtp_dl *dl, uint32_t addr);
+int dlumtp_encode_address(struct umtp_addr *addr,
+		char *ip, uint16_t port);
 
 struct umtp_dl *
 umtp_dludp_create(char *intf, char *ip, int port);

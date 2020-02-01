@@ -68,7 +68,7 @@ int _umtp_apdu_submit(struct umtp *umtp,
 		uint8_t *apdu, int pdu_len)
 {
 	if (!umtp->conf->sync_mode)
-		return mpu_put_recv(umtp->mpu, (void *)umtp,
+		return mpu_put_send(umtp->mpu, (void *)umtp,
 			dst, apdu, pdu_len);
 	return npdu_send(umtp, dst, apdu, pdu_len);
 }
@@ -125,8 +125,12 @@ int apdu_handler(struct umtp *umtp, struct umtp_addr *src,
 
 		if (apdu_type == UMTP_PDU_ERROR)
 			apdu_trans_blk[encode_len++] = (uint8_t)ret;
-		else
+		else 
+		{
+			memcpy(&apdu_trans_blk[encode_len], sd.data, sd.data_len);
 			encode_len += sd.data_len;
+		}
+
 		ret = _umtp_apdu_submit(umtp, src, &apdu_trans_blk[0], encode_len);
 		if (ret) {
 			debug(ERROR,

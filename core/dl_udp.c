@@ -57,11 +57,13 @@ static int dludp_recv_data(struct umtp_dl *dl,
 	} else {
 		return -ETIMEDOUT;
 	}
+
 	if (recv_bytes <= 0)
 		return 0;
 	if (recv_bytes > max_pdu)
 		return -ENOMEM;
 
+	dump_hex(stdout, pdu, recv_bytes);
 	/* message from myself, drop it */
 	if ((sin.sin_addr.s_addr == dl->addr.s_addr) &&
 			(sin.sin_port == dl->port))
@@ -82,6 +84,7 @@ static int dludp_recv_data(struct umtp_dl *dl,
 		}
 	} else {
 		memcpy(lpdu, &pdu[1], recv_bytes - 1);
+		pdu_len = recv_bytes - 1;
 	}
 
 	return pdu_len;
@@ -109,7 +112,7 @@ static int dludp_send_data(struct umtp_dl *dl,
 
 	dest.sin_family = AF_INET;
 	dest.sin_addr.s_addr = addr.s_addr;
-	dest.sin_port = port;
+	dest.sin_port = htons(port);
 	memset(&(dest.sin_zero), '\0', 8);
 
 	if (dl->encrypt) {
@@ -125,6 +128,8 @@ static int dludp_send_data(struct umtp_dl *dl,
 	buf[0] = UMTP_SIGNATURE;
 	len += 1;
 
+	//printf("dest is %s:%d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
+	dump_hex(stdout, buf, len);
 	bytes_sent = sendto(dl->socket, (char *)buf, len, 0,
 			(struct sockaddr *)&dest, sizeof(struct sockaddr));
 	if (bytes_sent != len) {
@@ -173,7 +178,7 @@ static int dludp_init(struct umtp_dl *dludp)
 
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = htonl(INADDR_ANY);
-	sin.sin_port = dludp->port;
+	sin.sin_port = htons(dludp->port);
 	memset(&(sin.sin_zero), '\0', sizeof(sin.sin_zero));
 	ret = bind(dludp->socket, (const struct sockaddr *)&sin, 
 			sizeof(struct sockaddr));
@@ -322,8 +327,8 @@ umtp_dludp_create(char *intf, char *ip, int port)
 	dl->exit = dludp_exit;
 	dl->send_data = dludp_send_data;
 	dl->recv_data = dludp_recv_data;
-	dl->encrypt = dludp_encrypt;
-	dl->decrypt = dludp_decrypt;
+//	dl->encrypt = dludp_encrypt;
+//	dl->decrypt = dludp_decrypt;
 
 	return dl;
 }

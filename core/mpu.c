@@ -66,7 +66,6 @@ static void mpu_msg_handle(ring_buffer *queue,
 		}
 		(void)ringbuf_pop(queue, NULL);
 	}
-		
 }
 
 static void get_abstime(struct timespec *abstime,
@@ -148,7 +147,7 @@ void mpu_stop(struct mpu *mpu)
 int mpu_put_recv(struct mpu *mpu, struct umtp_addr *src, void *data,
 		uint8_t *msg, int len)
 {
-	int bytes = 0;
+	int ret = -ENOMEM;
 	struct mpu_packet *pkt = NULL;
 	int i = 0;
 
@@ -168,18 +167,18 @@ int mpu_put_recv(struct mpu *mpu, struct umtp_addr *src, void *data,
 		pkt->data = data;
 		memcpy(&pkt->addr, src, sizeof(struct umtp_addr));
 		if (ringbuf_data_put(&mpu->recv_queue, (uint8_t *)pkt))
-			bytes = len;
+			ret = 0;
 	}
 	pthread_cond_signal(&mpu->mpu_msg_flag);
 	pthread_mutex_unlock(&mpu->mpu_msg_mutex);
 	
-	return bytes;
+	return ret;
 }
 
 int mpu_put_send(struct mpu *mpu, struct umtp_addr *dst,
 		void *data, uint8_t *msg, int len)
 {
-	int bytes = 0;
+	int ret = -ENOMEM;
 	struct mpu_packet *pkt = NULL;
 	int i = 0;
 
@@ -200,11 +199,11 @@ int mpu_put_send(struct mpu *mpu, struct umtp_addr *dst,
 		pkt->data = data;
 		memcpy(&pkt->addr, dst, sizeof(struct umtp_addr));
 		if (ringbuf_data_put(&mpu->send_queue, (uint8_t *)pkt))
-			bytes = len;
+			ret = 0;
 	}
 	pthread_cond_signal(&mpu->mpu_msg_flag);
 	pthread_mutex_unlock(&mpu->mpu_msg_mutex);
 	
-	return bytes;
+	return ret;
 }
 

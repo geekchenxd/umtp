@@ -8,6 +8,7 @@
 #include "debug.h"
 #include "mpu.h"
 #include "apdu.h"
+#include "npdu.h"
 
 
 static struct umtp_conf umtp_default_config = {
@@ -26,7 +27,7 @@ static int _umtp_send_msg(struct mpu_packet *pkt)
 
 static int _umtp_handle_msg(struct mpu_packet *pkt)
 {
-	return apdu_handler((struct umtp *)pkt->data, &pkt->addr,
+	return npdu_handler((struct umtp *)pkt->data, &pkt->addr,
 			pkt->buffer, pkt->length);
 }
 
@@ -53,7 +54,7 @@ static void *umtp_task(void *arg)
 		if (!conf->sync_mode)
 			ret = mpu_put_recv(umtp->mpu, (void *)umtp, &src, buf, len);
 		else
-			ret = apdu_handler(umtp, &src, buf, len);
+			ret = npdu_handler(umtp, &src, buf, len);
 		if (ret) {
 			debug(ERROR, "handle message error,ret %d\n", ret);
 		}
@@ -87,6 +88,11 @@ int umtp_start(struct umtp *umtp)
 			debug(ERROR, "Error create mpu for umtp,ret %d\n", ret);
 			return ret;
 		}
+		ret = mpu_start(umtp->mpu);
+		if (ret) {
+			debug(ERROR, "Error start mpu,ret %d\n", ret);
+			goto free_mpu;
+		}
 	}
 
 	if (umtp->dl->init) {
@@ -106,6 +112,9 @@ int umtp_start(struct umtp *umtp)
 	}
 
 	return 0;
+free_mpu:
+	mpu_destroy(umtp->mpu);
+	return ret;
 }
 
 void umtp_stop(struct umtp *umtp)
@@ -113,6 +122,11 @@ void umtp_stop(struct umtp *umtp)
 	if (umtp) {
 		if (umtp->dl->exit)
 			umtp->dl->exit(umtp->dl);
+		if (umtp->mpu) {
+			if (umtp->mpu->running)
+				mpu_stop(umtp->mpu);
+			mpu_destroy(umtp->mpu);
+		}
 		umtp->running = true;
 		pthread_join(umtp->task_id, NULL);
 	}
@@ -130,6 +144,7 @@ struct umtp *umtp_alloc(struct umtp_conf *conf, struct umtp_dl *dl)
 		debug(ERROR, "Error while allocate umtp\n");
 		return NULL;
 	}
+	memset(up, 0x0, sizeof *up);
 	
 	up->conf = conf;
 	if (!up->conf)

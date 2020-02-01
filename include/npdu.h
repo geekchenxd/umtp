@@ -10,7 +10,7 @@ struct umtp_npdu {
 
 int npdu_decode(uint8_t *npdu, struct umtp_npdu *npdu_data);
 uint16_t encode_npdu(uint8_t *npdu);
-void npdu_handler(struct umtp *umtp,
+int npdu_handler(struct umtp *umtp,
 		struct umtp_addr *src, uint8_t *pdu, 
 		uint16_t pdu_len);
 int npdu_send(struct umtp *umtp, struct umtp_addr *dst,

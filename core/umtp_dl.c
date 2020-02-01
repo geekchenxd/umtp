@@ -70,6 +70,23 @@ int dlumtp_decode_address(struct umtp_addr *addr,
 	return 6;
 }
 
+int dlumtp_encode_address(struct umtp_addr *addr,
+		char *ip, uint16_t port)
+{
+	struct in_addr inaddr;
+
+	if (!addr || !ip)
+		return 0;
+
+	inaddr.s_addr = inet_addr(ip);
+
+	memcpy(&addr->addr[0], &inaddr.s_addr, 4);
+	memcpy(&addr->addr[4], &port, 2);
+	addr->addr_len = 6;
+
+	return 6;
+}
+
 static int get_local_ifr_ioctl(char *ifname, 
 		struct ifreq *ifr, int opt)
 {
