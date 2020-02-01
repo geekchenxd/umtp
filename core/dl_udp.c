@@ -4,8 +4,11 @@
 #include <netdb.h>
 #include <sys/un.h>
 #include <net/route.h>
+#include <unistd.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <openssl/evp.h>
 #include <openssl/aes.h>
@@ -13,6 +16,8 @@
 #include <openssl/rand.h>
 #include "umtp_dl.h"
 #include "crypt.h"
+#include "umtp.h"
+#include "debug.h"
 
 #define PASSWDDEFAULT  "Hello Umtp"
 
@@ -27,10 +32,9 @@ static int dludp_recv_data(struct umtp_dl *dl,
 	struct timeval st;
 	struct sockaddr_in sin = {0x0};
 	socklen_t sin_len = sizeof(sin);
-	int i = 0;
 	uint8_t pdu[MAX_PDU] = {0x0};
 
-	if (!dl || !dl->socket < 0 || !src || !pdu)
+	if (!dl || dl->socket < 0 || !src || !lpdu)
 		return -EINVAL;
 
 	if (timeout >= 1000) {
@@ -98,9 +102,9 @@ static int dludp_send_data(struct umtp_dl *dl,
 	if (dst->addr_len == 0) {
 		/* broadcast addr */
 		port = dl->port;
-		memcpy(&addr, dl->broadcast_addr, sizeof(struct in_addr));
+		memcpy(&addr, &dl->broadcast_addr, sizeof(struct in_addr));
 	} else {
-		umtp_decode_address(dst, &addr, &port);
+		dlumtp_decode_address(dst, &addr, &port);
 	}
 
 	dest.sin_family = AF_INET;
@@ -122,9 +126,9 @@ static int dludp_send_data(struct umtp_dl *dl,
 	len += 1;
 
 	bytes_sent = sendto(dl->socket, (char *)buf, len, 0,
-			(struct sockaddr *)&dest, sizeof(strct sockaddr));
+			(struct sockaddr *)&dest, sizeof(struct sockaddr));
 	if (bytes_sent != len) {
-		debug(ERROR, "udp send data failed!\n", strerror(errno));
+		debug(ERROR, "udp send data failed!-%s\n", strerror(errno));
 		return -errno;
 	}
 
@@ -141,7 +145,7 @@ static int dludp_init(struct umtp_dl *dludp)
 		return -EINVAL;
 
 	if (dludp->port <= 0)
-		dludp->port = UMTP_DEFALUT_PORT;
+		dludp->port = UMTP_DEFAULT_PORT;
 
 	if (dludp->ip)
 		inet_aton(dludp->ip, &dludp->addr);
@@ -159,7 +163,7 @@ static int dludp_init(struct umtp_dl *dludp)
 	}
 
 	sockopt = 1;
-	ret = setsockopt(dludp->sockfd, SOL_SOCKET,
+	ret = setsockopt(dludp->socket, SOL_SOCKET,
 			SO_REUSEADDR, &sockopt, sizeof(sockopt));
 	if (ret) {
 		debug(ERROR, "setsockopt error:%s\n", strerror(errno));
@@ -171,13 +175,14 @@ static int dludp_init(struct umtp_dl *dludp)
 	sin.sin_addr.s_addr = htonl(INADDR_ANY);
 	sin.sin_port = dludp->port;
 	memset(&(sin.sin_zero), '\0', sizeof(sin.sin_zero));
-	ret = bind(sockfd, (const struct sockaddr *)&sin, 
+	ret = bind(dludp->socket, (const struct sockaddr *)&sin, 
 			sizeof(struct sockaddr));
 	if (ret) {
 		debug(ERROR, "Error bind:%s\n", strerror(errno));
 		ret = errno;
 		goto close_socket;
 	}
+	debug(INFO, "udp bind at %s:%d\n", dludp->ip, dludp->port);
 
 	return 0;
 
@@ -305,6 +310,7 @@ umtp_dludp_create(char *intf, char *ip, int port)
 				strerror(errno));
 		return NULL;
 	}
+	memset(dl, 0x0, sizeof *dl);
 
 	dl->type = UMTP_DL_UDP;
 	dl->ip = ip;

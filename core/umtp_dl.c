@@ -2,10 +2,13 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <string.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
 #include <net/if.h>
 #include <net/if_arp.h>
+#include <sys/ioctl.h>
 #include "umtp_dl.h"
 
 
@@ -40,7 +43,7 @@ void dlumtp_get_umtp_bcast_addr(struct umtp_dl *dl, struct umtp_addr *addr)
 	if (!addr || !dl)
 		return;
 
-	adr->addr_len = 6;
+	addr->addr_len = 6;
 	memcpy(&addr->addr[0], &dl->broadcast_addr.s_addr, 4);
 	memcpy(&addr->addr[4], &dl->port, 2);
 }
@@ -50,7 +53,7 @@ void dlumtp_get_umtp_addr(struct umtp_dl *dl, struct umtp_addr *addr)
 	if (!addr || !dl)
 		return;
 
-	adr->addr_len = 6;
+	addr->addr_len = 6;
 	memcpy(&addr->addr[0], &dl->addr.s_addr, 4);
 	memcpy(&addr->addr[4], &dl->port, 2);
 }
@@ -126,10 +129,10 @@ int dlumtp_bcast_addr_get(char *ifname, struct in_addr *laddr,
 
 	ret = get_local_address_ioctl(ifname, &netmask, SIOCGIFNETMASK);
 	if (ret) {
-		addr.s_addr = ~0;
+		addr->s_addr = ~0;
 	} else {
-		memcpy(add, laddr, sizeof(struct in_addr));
-		addr.s_addr |= (~netmask.s_addr);
+		memcpy(addr, laddr, sizeof(struct in_addr));
+		addr->s_addr |= (~netmask.s_addr);
 	}
 
 	return ret;

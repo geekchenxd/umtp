@@ -37,7 +37,7 @@ int umtp_do_hooks(int hook_layer, uint8_t *data,
 {
 	struct hook_priority *hp;
 	struct umtp_hook *hook;
-	int i, j;
+	int i;
 	int ret;
 	struct list_head *pos;
 
@@ -116,7 +116,6 @@ int umtp_hook_register(struct umtp_hook *hook)
 int umtp_hook_unregister(struct umtp_hook *hook)
 {
 	struct hook_priority *hp;
-	struct list_head *hk_head;
 
 	if (!hook)
 		return -EINVAL;

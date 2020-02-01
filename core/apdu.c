@@ -1,7 +1,18 @@
 #include <errno.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 #include "apdu.h"
 #include "session.h"
 #include "error.h"
+#include "umtp.h"
+#include "debug.h"
+#include "service.h"
+#include "npdu.h"
+#include "mpu.h"
 
 static uint8_t apdu_trans_blk[MAX_APDU];
 /*
@@ -35,29 +46,41 @@ void apdu_timeout_set(uint32_t timeout)
 	umtp_apdu_timeout = timeout;
 }
 
-bool apdu_flag_has_session_id(uint8_t apdu_flag)
+static bool apdu_has_session_id(uint8_t apdu_flag)
 {
-	return apdu_type & UMTP_SESSION_ID_MASK;
+	return apdu_flag & UMTP_SESSION_ID_MASK;
 }
 
-void apdu_flag_set_session_id(uint8_t apdu_flag)
+static void apdu_flag_set_session_id(uint8_t apdu_flag)
 {
-	apdu_type |= UMTP_SESSION_ID_MASK;
+	apdu_flag |= UMTP_SESSION_ID_MASK;
 }
 
-static int _umtp_apdu_submit(struct umtp_addr *dst,
-		uint8_t apdu, uint16_t pdu_len)
+static void apdu_timeout_handler(struct umtp_addr *dst,
+		uint8_t *apdu, int apdu_len)
 {
+	int service = apdu[2];
+	service_timeout_handler(dst, service, &apdu[4], apdu_len - 4);
+}
+
+int _umtp_apdu_submit(struct umtp *umtp,
+		struct umtp_addr *dst,
+		uint8_t *apdu, int pdu_len)
+{
+	if (!umtp->conf->sync_mode)
+		return mpu_put_recv(umtp->mpu, (void *)umtp,
+			dst, apdu, pdu_len);
+	return npdu_send(umtp, dst, apdu, pdu_len);
 }
 
 /*
  * according to diffrent pdu type and service call the 
  * service handler function.
  */
-int apdu_handler(struct umtp_addr *src, 
+int apdu_handler(struct umtp *umtp, struct umtp_addr *src, 
 		uint8_t *apdu, uint16_t pdu_len)
 {
-	uint8_t session_id;
+	uint8_t session_id = 0;
 	uint8_t apdu_flag;
 	uint8_t apdu_type;
 	int service;
@@ -66,10 +89,11 @@ int apdu_handler(struct umtp_addr *src,
 	int ret = UMTP_ERROR_UNKNOW_PDU_TYPE;
 	struct service_data sd;
 	int service_data_offset;
-	struct umtp_session *session;
+	struct umtp_session *session = NULL;
 
-	if (!apdu)
+	if (!apdu || !umtp)
 		return -EINVAL;
+
 	apdu_flag = apdu[decode_len++];
 	apdu_type = apdu[decode_len++];
 	if (apdu_type >= UMTP_PDU_TYPE_MAX)
@@ -103,7 +127,7 @@ int apdu_handler(struct umtp_addr *src,
 			apdu_trans_blk[encode_len++] = (uint8_t)ret;
 		else
 			encode_len += sd.data_len;
-		ret = _umtp_apdu_submit(src, apdu_trans_blk, encode_len);
+		ret = _umtp_apdu_submit(umtp, src, &apdu_trans_blk[0], encode_len);
 		if (ret) {
 			debug(ERROR,
 					"Error while submit ack for service request!, service:%d,return:%d\n",
@@ -113,7 +137,7 @@ int apdu_handler(struct umtp_addr *src,
 		break;
 	case UMTP_PDU_RESPONSE:
 		if (apdu_has_session_id(apdu_flag))
-			session = umtp_session_get(session_id);
+			session = umtp_get_session(session_id);
 		service_rsp_handler(src, service, session, &apdu[decode_len],
 				pdu_len - decode_len);
 
@@ -123,7 +147,7 @@ int apdu_handler(struct umtp_addr *src,
 		return 0;
 	case UMTP_PDU_ERROR:
 		if (apdu_has_session_id(apdu_flag))
-			session = umtp_session_get(session_id);
+			session = umtp_get_session(session_id);
 		service_error_handler(src, service, (int)apdu[decode_len], session);
 		if (apdu_has_session_id(apdu_flag))
 			umtp_session_clear(session_id);
@@ -137,48 +161,51 @@ int apdu_handler(struct umtp_addr *src,
 	default:
 		break;
 	}
+
+	return 0;
 }
 
-static int encode_apdu_common(uint8_t *apdu,
-		uint8_t apdu_flag, int pdu_type, int service)
-{
-	int encode_len = 0;
-	if (!apdu)
-		return 0;
-
-	apdu[encode_len++] = apdu_flag;
-	apdu[encode_len++] = (uint8_t)pdu_type;
-	apdu[encode_len++] = (uint8_t)service;
-	/* the session id area will be seted later */
-	if (apdu_has_session_id(apdu_flag))
-		encode_len++;
-
-	return encode_len;
-}
-
-int umtp_apdu_submit(struct umtp_addr *dst,
+int umtp_apdu_submit(struct umtp *umtp, struct umtp_addr *dst,
 		struct apdu_data *apdu_data)
 {
-	int len, i;
-	uint8_t tmp[MAX_APDU - 4] = {0x0};
+	uint8_t tmp[MAX_APDU] = {0x0};
 	uint8_t apdu_flag = 0;
+	uint8_t session_id = 0;
+	int encode_len = 0;
+
+	if (!umtp)
+		return -EINVAL;
 	if (!apdu_data || sizeof(apdu_data->data) > MAX_APDU)
 		return -EINVAL;
 
+	/* flag set. */
 	if (apdu_data->confirmed)
 		apdu_flag_set_session_id(apdu_flag);
 
-	memcpy(tmp, apdu_data->data, apdu_data->data_len);
+	tmp[encode_len++] = apdu_flag;
+	tmp[encode_len++] = UMTP_PDU_REQUEST;
+	tmp[encode_len++] = apdu_data->service;
 
-	len = encode_apdu_common(apdu_data->data, apdu_flag,
-			apdu_data->pdu_type, apdu_data->service);
-	if (len <= 0) {
-		debug(ERROR, "Encode apdu common failed!return %d\n", ret);
-		return ret;
+	/* the session id area will be seted later */
+	if (apdu_has_session_id(apdu_flag)) {
+		while (session_id == 0) {
+			session_id = umtp_free_session();
+			if (session_id == 0)
+				usleep(100);
+		}
+		tmp[encode_len++] = session_id;
 	}
-	memcpy(&apdu_data->data[len], tmp, apdu_data->data_len);
 
-	return _umtp_apdu_submit(dst, apdu_data->data, apdu_data->data_len + ret);
+	memcpy(&tmp[encode_len], apdu_data->data,
+			apdu_data->data_len);
+
+	encode_len += apdu_data->data_len;
+
+	if (apdu_data->confirmed)
+		umtp_session_set(session_id, apdu_timeout_handler, umtp,
+				dst, tmp, encode_len);
+
+	return _umtp_apdu_submit(umtp, dst, tmp, encode_len);
 }
 
 
