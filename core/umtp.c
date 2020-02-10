@@ -4,11 +4,13 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <time.h>
 #include "umtp.h"
 #include "debug.h"
 #include "mpu.h"
 #include "apdu.h"
 #include "npdu.h"
+#include "session.h"
 
 
 static struct umtp_conf umtp_default_config = {
@@ -21,8 +23,8 @@ extern int _umtp_apdu_submit(struct umtp *umtp,
 
 static int _umtp_send_msg(struct mpu_packet *pkt)
 {
-	return _umtp_apdu_submit((struct umtp *)pkt->data,
-		&pkt->addr, pkt->buffer, pkt->length);
+	return npdu_send((struct umtp *)pkt->data, &pkt->addr,
+			pkt->buffer, pkt->length);
 }
 
 static int _umtp_handle_msg(struct mpu_packet *pkt)
@@ -40,23 +42,36 @@ static void *umtp_task(void *arg)
 	struct umtp_addr src;
 	uint8_t buf[MAX_PDU];
 	int ret;
+	time_t last_seconds = 0;
+	time_t current_seconds = 0;
+	uint32_t elapsed_seconds = 0;
+	uint32_t elapsed_milliseconds = 0;
+
+	last_seconds = time(NULL);
 
 	while (umtp->running) {
+		current_seconds = time(NULL);
 		len = dl->recv_data(dl, &src, buf, MAX_PDU, 1000);
 		if (len < 0 && len != -ETIMEDOUT) {
 			debug(ERROR, "Umtp recv error, ret %d\n", len);
 			break;
 		}
-		if (len == 0 || len == -ETIMEDOUT) {
-			usleep(10);
-			continue;
+
+		if (len > 0) {
+			if (!conf->sync_mode)
+				ret = mpu_put_recv(umtp->mpu, &src, (void *)umtp, buf, len);
+			else
+				ret = npdu_handler(umtp, &src, buf, len);
+			if (ret) {
+				debug(ERROR, "handle message error,ret %d\n", ret);
+			}
 		}
-		if (!conf->sync_mode)
-			ret = mpu_put_recv(umtp->mpu, (void *)umtp, &src, buf, len);
-		else
-			ret = npdu_handler(umtp, &src, buf, len);
-		if (ret) {
-			debug(ERROR, "handle message error,ret %d\n", ret);
+		
+		elapsed_seconds = (uint32_t)(current_seconds - last_seconds);
+		if (elapsed_seconds) {
+			elapsed_milliseconds = elapsed_seconds * 1000;
+			last_seconds = current_seconds;
+			umtp_session_process(elapsed_milliseconds);
 		}
 	}
 

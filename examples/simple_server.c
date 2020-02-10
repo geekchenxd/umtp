@@ -10,6 +10,8 @@ static int simple_server_req_handler(struct umtp_addr *src,
 	struct service_data *sd, uint8_t *pdu, int len)
 {
 	printf("server recv:%s\n", (char *)pdu);
+	memcpy(sd->data, "Nihao China", 12);
+	sd->data_len = 12;
 	return 0;
 }
 
@@ -24,10 +26,10 @@ int main(void)
 	struct umtp *umtp;
 	struct umtp_dl *dl;
 	struct umtp_conf conf = {
-		.sync_mode = true,
+		.sync_mode = false,
 	};
 
-	dl = umtp_dludp_create("ens33", "192.168.0.120", -1);
+	dl = umtp_dludp_create("eth0", "0.0.0.0", -1);
 	if (!dl) {
 		printf("umtp_dludp_create failed!\n");
 		return -1;

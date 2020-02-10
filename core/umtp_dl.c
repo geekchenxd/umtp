@@ -74,6 +74,7 @@ int dlumtp_encode_address(struct umtp_addr *addr,
 		char *ip, uint16_t port)
 {
 	struct in_addr inaddr;
+	uint16_t tmp_port = htons(port);
 
 	if (!addr || !ip)
 		return 0;
@@ -81,7 +82,7 @@ int dlumtp_encode_address(struct umtp_addr *addr,
 	inaddr.s_addr = inet_addr(ip);
 
 	memcpy(&addr->addr[0], &inaddr.s_addr, 4);
-	memcpy(&addr->addr[4], &port, 2);
+	memcpy(&addr->addr[4], &tmp_port, 2);
 	addr->addr_len = 6;
 
 	return 6;

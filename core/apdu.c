@@ -51,9 +51,9 @@ static bool apdu_has_session_id(uint8_t apdu_flag)
 	return apdu_flag & UMTP_SESSION_ID_MASK;
 }
 
-static void apdu_flag_set_session_id(uint8_t apdu_flag)
+static void apdu_flag_set_session_id(uint8_t *apdu_flag)
 {
-	apdu_flag |= UMTP_SESSION_ID_MASK;
+	*apdu_flag |= UMTP_SESSION_ID_MASK;
 }
 
 static void apdu_timeout_handler(struct umtp_addr *dst,
@@ -68,8 +68,8 @@ int _umtp_apdu_submit(struct umtp *umtp,
 		uint8_t *apdu, int pdu_len)
 {
 	if (!umtp->conf->sync_mode)
-		return mpu_put_send(umtp->mpu, (void *)umtp,
-			dst, apdu, pdu_len);
+		return mpu_put_send(umtp->mpu, dst, (void *)umtp,
+			apdu, pdu_len);
 	return npdu_send(umtp, dst, apdu, pdu_len);
 }
 
@@ -184,7 +184,7 @@ int umtp_apdu_submit(struct umtp *umtp, struct umtp_addr *dst,
 
 	/* flag set. */
 	if (apdu_data->confirmed)
-		apdu_flag_set_session_id(apdu_flag);
+		apdu_flag_set_session_id(&apdu_flag);
 
 	tmp[encode_len++] = apdu_flag;
 	tmp[encode_len++] = UMTP_PDU_REQUEST;

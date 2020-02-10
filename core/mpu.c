@@ -35,6 +35,7 @@ int mpu_create(struct mpu **_mpu,
 
 	p_mpu->recv_handler = recv_handler;
 	p_mpu->send_handler = send_handler;
+	p_mpu->timeout = 100; /* ms */
 
 	return 0;
 }
@@ -158,7 +159,7 @@ int mpu_put_recv(struct mpu *mpu, struct umtp_addr *src, void *data,
 		return 0;
 	}
 	
-	pthread_mutex_lock(&mpu->mpu_msg_mutex);
+//	pthread_mutex_lock(&mpu->mpu_msg_mutex);
 	pkt = (struct mpu_packet *)ringbuf_data_peek(&mpu->recv_queue);
 	if (pkt) {
 		for (i = 0; i < len; i++)
@@ -170,7 +171,7 @@ int mpu_put_recv(struct mpu *mpu, struct umtp_addr *src, void *data,
 			ret = 0;
 	}
 	pthread_cond_signal(&mpu->mpu_msg_flag);
-	pthread_mutex_unlock(&mpu->mpu_msg_mutex);
+//	pthread_mutex_unlock(&mpu->mpu_msg_mutex);
 	
 	return ret;
 }
@@ -190,7 +191,7 @@ int mpu_put_send(struct mpu *mpu, struct umtp_addr *dst,
 		return 0;
 	}
 	
-	pthread_mutex_lock(&mpu->mpu_msg_mutex);
+//	pthread_mutex_lock(&mpu->mpu_msg_mutex);
 	pkt = (struct mpu_packet *)ringbuf_data_peek(&mpu->send_queue);
 	if (pkt) {
 		for (i = 0; i < len; i++)
@@ -202,7 +203,7 @@ int mpu_put_send(struct mpu *mpu, struct umtp_addr *dst,
 			ret = 0;
 	}
 	pthread_cond_signal(&mpu->mpu_msg_flag);
-	pthread_mutex_unlock(&mpu->mpu_msg_mutex);
+//	pthread_mutex_unlock(&mpu->mpu_msg_mutex);
 	
 	return ret;
 }

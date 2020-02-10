@@ -23,12 +23,18 @@ static void simple_client_rsp_handler(struct umtp_addr *src,
 	printf("client recv:%s\n", (char *)pdu);
 	wait = 0;
 }
+static void simple_client_timeout(struct umtp_addr *dst,
+		int service_id, uint8_t *data, int len)
+{
+	printf("%s:service id is %d\n", __func__, service_id);
+}
 
 static struct service_type simple_client = {
 	.id = 1,
 	.name = "simple client",
 	.rsp_handler = simple_client_rsp_handler,
 	.req_handler = simple_server_req_handler,
+	.timeout_handler = simple_client_timeout,
 };
 
 static struct umtp_conf conf = {
@@ -48,11 +54,11 @@ int main(int argc, char *argv[])
 		.confirmed = 1,
 	};
 
-	dlumtp_encode_address(&dst, "192.168.0.120", 11784);
+	dlumtp_encode_address(&dst, "127.0.0.1", 11784);
 	memcpy(&send_data.data, "hello world", 12);
 	send_data.data_len = 12;
 
-	dl = umtp_dludp_create("ens33", "0.0.0.0", 10000);
+	dl = umtp_dludp_create("eth0", "0.0.0.0", 10000);
 	if (!dl) {
 		printf("umtp_dludp_create failed!\n");
 		return -1;
@@ -74,10 +80,13 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	len = umtp_send_message(umtp, &dst, &send_data);
-	if (len < 0) {
-		printf("send message failed!\n");
-		return -1;
+	int n = 10;
+	while (n--) {
+		len = umtp_send_message(umtp, &dst, &send_data);
+		if (len < 0) {
+			printf("send message failed!\n");
+			return -1;
+		}
 	}
 
 	while (wait) {

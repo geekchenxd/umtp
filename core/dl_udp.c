@@ -57,12 +57,14 @@ static int dludp_recv_data(struct umtp_dl *dl,
 	} else {
 		return -ETIMEDOUT;
 	}
+	//debug(INFO, "src is %s:%d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
 
 	if (recv_bytes <= 0)
 		return 0;
 	if (recv_bytes > max_pdu)
 		return -ENOMEM;
 
+	debug(INFO, "Datalink received data is:");
 	dump_hex(stdout, pdu, recv_bytes);
 	/* message from myself, drop it */
 	if ((sin.sin_addr.s_addr == dl->addr.s_addr) &&
@@ -112,7 +114,7 @@ static int dludp_send_data(struct umtp_dl *dl,
 
 	dest.sin_family = AF_INET;
 	dest.sin_addr.s_addr = addr.s_addr;
-	dest.sin_port = htons(port);
+	dest.sin_port = port;
 	memset(&(dest.sin_zero), '\0', 8);
 
 	if (dl->encrypt) {
@@ -128,7 +130,8 @@ static int dludp_send_data(struct umtp_dl *dl,
 	buf[0] = UMTP_SIGNATURE;
 	len += 1;
 
-	//printf("dest is %s:%d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
+//	debug(INFO, "dest is %s:%d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
+	debug(INFO, "Data link sending data is:");
 	dump_hex(stdout, buf, len);
 	bytes_sent = sendto(dl->socket, (char *)buf, len, 0,
 			(struct sockaddr *)&dest, sizeof(struct sockaddr));

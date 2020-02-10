@@ -2,6 +2,7 @@
  * session menagement
  */
 #include <string.h>
+#include <stdio.h>
 #include "session.h"
 #include "apdu.h"
 #include "npdu.h"
